@@ -1,0 +1,88 @@
+#!/bin/bash -f
+
+# Copyright(c) 2017        Intel Deutschland GmbH
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+# Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in
+# the documentation and/or other materials provided with the distribution.
+# Neither the name Intel Corporation nor the names of its
+# contributors may be used to endorse or promote products derived
+# from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+# create temporary directory and clean it up when the script exits
+tmpdir=$(mktemp -d)
+if [ $? -ne 0 ] ; then
+	exit 2
+fi
+function cleanup {
+	rm -rf $tmpdir
+}
+trap cleanup EXIT
+
+phyname=$(basename ${DEVPATH})
+timestamp=$(date +%F_%H-%M-%S)
+filename=$tmpdir/iwl-fw-error_${timestamp}.dump
+
+# Save dmesg and syslog to $tmpdir/
+dmesg_filename=$tmpdir/dmesg_${timestamp}.log
+mod_params_filename=$tmpdir/module_params_${timestamp}.log
+
+if [ -e  /sys/kernel/debug/ieee80211/${phyname}/iwlwifi/iwlmvm/fw_error_dump ]; then
+	cat /sys/kernel/debug/ieee80211/${phyname}/iwlwifi/iwlmvm/fw_error_dump > ${filename}
+	exit 0
+fi
+
+cat /sys/${DEVPATH}/data > $filename
+echo 1 > /sys/${DEVPATH}/data
+
+dmesg > $dmesg_filename
+
+tar_filename=/var/log/iwl-fw-error_${timestamp}.tgz
+
+# Get module params
+echo "iwlmvm:" > ${mod_params_filename}
+set +f
+for file in /sys/module/iwlmvm/parameters/*
+do
+	if [ -f $file ]; then
+		echo -n "$file: " >> ${mod_params_filename}
+		cat $file >> ${mod_params_filename}
+	fi
+done
+echo "iwlwifi:" >> ${mod_params_filename}
+for file in /sys/module/iwlwifi/parameters/*
+do
+	if [ -f $file ]; then
+		echo -n "$file: " >> ${mod_params_filename}
+		cat $file >> ${mod_params_filename}
+	fi
+done
+set -f
+
+# Create tarball and delete tmp files
+tar czvf $tar_filename $filename $dmesg_filename $mod_params_filename --transform 's/.*\///'
+rm -f $filename $dmesg_filename $mod_params_filename
+
+# Make sure that the directory that stores the dumps doesn't pass the size of MB_BOUNDRY mb
+MB_BOUNDRY=1000
+ls -ltc /var/log/iwl-fw-error* | \
+awk '{ size += $5; if (size > "'"$MB_BOUNDRY"'"*2^20) system("rm " $9) }'

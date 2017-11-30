@@ -28,61 +28,32 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-# create temporary directory and clean it up when the script exits
-tmpdir=$(mktemp -d)
-if [ $? -ne 0 ] ; then
-	exit 2
-fi
-function cleanup {
-	rm -rf $tmpdir
-}
-trap cleanup EXIT
-
-phyname=$(basename ${DEVPATH})
-timestamp=$(date +%F_%H-%M-%S)
-filename=$tmpdir/iwl-fw-error_${timestamp}.dump
-
-# Save dmesg and syslog to $tmpdir/
-dmesg_filename=$tmpdir/dmesg_${timestamp}.log
-mod_params_filename=$tmpdir/module_params_${timestamp}.log
-
-if [ -e  /sys/kernel/debug/ieee80211/${phyname}/iwlwifi/iwlmvm/fw_error_dump ]; then
-	cat /sys/kernel/debug/ieee80211/${phyname}/iwlwifi/iwlmvm/fw_error_dump > ${filename}
-	exit 0
+if [ $? -ne 0 ]; then
+  exit 2
 fi
 
-cat /sys/${DEVPATH}/data > $filename
-echo 1 > /sys/${DEVPATH}/data
+LOGDIR_BASE=/var/log
 
-dmesg > $dmesg_filename
+current_time="$(date +%s)"
+timestamp_file="${LOGDIR_BASE}/last_iwlwifi_dump_time"
+if [ -f "${timestamp_file}" ]; then
+  last_time="$(cat ${timestamp_file})"
+  time_since_last="$((${current_time} - ${last_time}))"
+  if [ "${time_since_last}" -lt 300 ]; then
+    # A dump started within the last five minutes.
+    logger -t fwdump \
+        "Dump occurred ${time_since_last} seconds ago, not starting another"
+    exit 1
+  fi
+fi
 
-tar_filename=/var/log/iwl-fw-error_${timestamp}.tgz
+echo "${current_time}" > "${timestamp_file}"
+filename="${LOGDIR_BASE}/iwl-fw-error.dump"
 
-# Get module params
-echo "iwlmvm:" > ${mod_params_filename}
-set +f
-for file in /sys/module/iwlmvm/parameters/*
-do
-	if [ -f $file ]; then
-		echo -n "$file: " >> ${mod_params_filename}
-		cat $file >> ${mod_params_filename}
-	fi
-done
-echo "iwlwifi:" >> ${mod_params_filename}
-for file in /sys/module/iwlwifi/parameters/*
-do
-	if [ -f $file ]; then
-		echo -n "$file: " >> ${mod_params_filename}
-		cat $file >> ${mod_params_filename}
-	fi
-done
-set -f
+logger -t fwdump "Saving debug dump to ${filename}"
 
-# Create tarball and delete tmp files
-tar czvf $tar_filename $filename $dmesg_filename $mod_params_filename --transform 's/.*\///'
-rm -f $filename $dmesg_filename $mod_params_filename
+cat "/sys/${DEVPATH}/data" > "${filename}"
+echo 1 > "/sys/${DEVPATH}/data"
 
-# Make sure that the directory that stores the dumps doesn't pass the size of MB_BOUNDRY mb
-MB_BOUNDRY=1000
-ls -ltc /var/log/iwl-fw-error* | \
-awk '{ size += $5; if (size > "'"$MB_BOUNDRY"'"*2^20) system("rm " $9) }'
+start iwlwifi-dump-processor \
+    DUMP_FILE_PATH="${filename}" OUTPUT_PATH="${LOGDIR_BASE}/last_iwlwifi_dump"

@@ -55,5 +55,4 @@ logger -t fwdump "Saving debug dump to ${filename}"
 cat "/sys/${DEVPATH}/data" > "${filename}"
 echo 1 > "/sys/${DEVPATH}/data"
 
-start iwlwifi-dump-processor \
-    DUMP_FILE_PATH="${filename}" OUTPUT_PATH="${LOGDIR_BASE}/last_iwlwifi_dump"
+start iwlwifi-dump-processor DUMP_FILE_PATH="${filename}"

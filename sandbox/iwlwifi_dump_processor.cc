@@ -122,14 +122,14 @@ bool ProcessDump(const base::FilePath& dump_file) {
     return false;
   }
 
-  base::FilePath dump_file_target = temp_dir.path().Append(kDumpName);
+  base::FilePath dump_file_target = temp_dir.GetPath().Append(kDumpName);
   if (!base::Move(dump_file, dump_file_target)) {
     DLOG(ERROR) << "Failed to move " << dump_file.value()
                 << " into the temp sandbox directory";
     return false;
   }
 
-  if (!RunFwParser(temp_dir.path()))
+  if (!RunFwParser(temp_dir.GetPath()))
     return false;
 
   dprintf(STDOUT_FILENO, "\n");
@@ -137,7 +137,8 @@ bool ProcessDump(const base::FilePath& dump_file) {
   // Only print the relevant output files. Other files may contain PII
   // that we don't know how to filter in the general case, so we leave
   // them out.
-  base::FileEnumerator fe(temp_dir.path(), false, base::FileEnumerator::FILES);
+  base::FileEnumerator fe(
+      temp_dir.GetPath(), false, base::FileEnumerator::FILES);
   for (base::FilePath current = fe.Next();
        !current.empty();
        current = fe.Next()) {

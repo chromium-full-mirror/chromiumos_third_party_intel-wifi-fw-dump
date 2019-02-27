@@ -53,6 +53,5 @@ filename="${LOGDIR_BASE}/iwl-fw-error.dump"
 logger -t fwdump "Saving debug dump to ${filename}"
 
 cat "/sys/${DEVPATH}/data" > "${filename}"
-echo 1 > "/sys/${DEVPATH}/data"
 
 start iwlwifi-dump-processor DUMP_FILE_PATH="${filename}"

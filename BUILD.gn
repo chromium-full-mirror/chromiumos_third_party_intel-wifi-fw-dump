@@ -1,0 +1,27 @@
+# Copyright 2019 The Chromium OS Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//common-mk/pkg_config.gni")
+
+group("all") {
+  deps = [
+    ":iwlwifi_dump_processor",
+  ]
+}
+
+pkg_config("config") {
+  pkg_deps = [
+    "libbrillo-${libbase_ver}",
+    "libchrome-${libbase_ver}",
+    "libminijail",
+  ]
+}
+
+executable("iwlwifi_dump_processor") {
+  configs += [ ":config" ]
+
+  sources = [
+    "sandbox/iwlwifi_dump_processor.cc",
+  ]
+}

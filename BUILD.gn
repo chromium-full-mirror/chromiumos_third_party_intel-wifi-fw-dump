@@ -13,7 +13,7 @@ group("all") {
 pkg_config("config") {
   pkg_deps = [
     "libbrillo",
-    "libchrome-${libbase_ver}",
+    "libchrome",
     "libminijail",
   ]
 }
